@@ -24,8 +24,7 @@ async function confirm() {
   error.value = ''; busy.value = true
   try {
     confirmed.value = await postJSON('/api/estimate/confirm', { receipt: out.value.receipt.token, note: note.value })
-    // 确认后保留回执对象，便于观察二次确认行为；历史列表会出现新行
-    // out.value = null
+    receiptDead.value = true // 回执为一次性：核销后不可再用，需重新干算拿新回执
   } catch (e) {
     error.value = e.message
     receiptDead.value = true // 当前回执已失效，需重新干算拿新回执
@@ -40,7 +39,7 @@ async function confirm() {
   <button :disabled="busy" @click="dryRun">干算</button>
   <button :disabled="busy || !out || !out.receipt || receiptDead" @click="confirm">确认入账</button>
   <p v-if="error" class="warn">{{ error }} — 可重新干算获取新回执</p>
-  <p v-if="confirmed">已入账 run #{{ confirmed.run_id }}（{{ confirmed.rolls }} 卷），记录页可见新行；同回执可再次点确认观察结果</p>
+  <p v-if="confirmed">已入账 run #{{ confirmed.run_id }}（{{ confirmed.rolls }} 卷），记录页可见新行；回执已核销，再次确认需重新干算</p>
   <div v-if="out"><strong>{{ out.rolls }} 卷</strong> · {{ out.drops }} 条 · 每条 {{ out.drop_len_m }}m
   <p v-if="out.receipt" class="receipt-line">一次性回执：<code>{{ out.receipt.token }}</code><span v-if="receiptDead" class="warn">（已失效，请重新干算）</span></p>
   <DropStripBar :drops="out.drops" :drop-len="out.drop_len_m" :rolls="out.rolls" /></div>

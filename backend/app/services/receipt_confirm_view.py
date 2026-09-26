@@ -2,24 +2,9 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
-
-from app.engines.wallpaper_math import roll_count
+import json
 
 
-def drift_result_from_live(wall: dict, roll: dict, pinned: dict | None = None) -> dict:
-    """Rebuild rolls from the current wall/roll entities (may diverge from receipt pin)."""
-    calc = roll_count(
-        wall["perimeter"], wall["height"], roll["width"], roll["length"], roll["pattern_cm"]
-    )
-    out = deepcopy(pinned) if isinstance(pinned, dict) else {}
-    out.update(calc)
-    out["wall_id"] = wall["id"]
-    out["roll_id"] = roll["id"]
-    out["confirm_source"] = "live_entities"
-    return out
-
-
-def preview_keeps_pin(pinned: dict) -> dict:
-    """Dry-run / receipt response stays on the issued snapshot."""
-    return pinned
+def pinned_result(receipt: dict) -> dict:
+    """确认写入与回执响应都使用签发时钉住的干算快照（回执面值），不按现行墙面/卷材重算。"""
+    return json.loads(receipt["result_json"])

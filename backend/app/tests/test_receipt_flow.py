@@ -59,6 +59,21 @@ def test_confirm_missing_or_unknown_receipt_fails():
     assert _runs_count() == before
 
 
+def test_confirm_writes_receipt_face_values():
+    before = _runs_count()
+    body = _dry_run()
+    token = body["receipt"]["token"]
+    r = client.post("/api/estimate/confirm", json={"receipt": token})
+    assert r.status_code == 200, r.text
+    assert r.json()["rolls"] == body["receipt"]["rolls"] == body["rolls"]
+    assert _runs_count() == before + 1
+    latest = client.get("/api/runs").json()["items"][0]
+    assert latest["id"] == r.json()["run_id"]
+    # 写入行的幅数/卷数必须等于回执面值，而非确认当下重算值
+    assert latest["result"]["rolls"] == body["rolls"]
+    assert latest["result"]["drops"] == body["drops"]
+
+
 def test_confirm_reused_receipt_fails():
     before = _runs_count()
     token = _dry_run()["receipt"]["token"]
