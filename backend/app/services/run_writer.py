@@ -1,17 +1,11 @@
-"""写 run：确认入账时按当前墙面/卷材重算卷数后写入历史表（与核销同事务）。"""
+"""写 run：确认入账时把回执钉住的干算快照原样写入历史表（与核销同事务）。"""
 
-from app.repositories import history, rolls, walls
-from app.services.receipt_confirm_view import drift_result_from_live
+from app.repositories import history
+from app.services.receipt_confirm_view import pinned_result
 
 
 def write_run(conn, receipt: dict, note: str) -> int:
-    import json
-
-    pinned = json.loads(receipt["result_json"])
-    wall = walls.get_wall(receipt["wall_id"], conn)
-    roll = rolls.get_roll(receipt["roll_id"], conn)
-    if wall and roll:
-        result = drift_result_from_live(wall, roll, pinned)
-    else:
-        result = pinned
-    return history.insert_run(receipt["wall_id"], receipt["roll_id"], result, note, conn=conn)
+    """写入的 drops/rolls 必须等于回执面值，绝不按确认当下的墙面/卷材重算。"""
+    return history.insert_run(
+        receipt["wall_id"], receipt["roll_id"], pinned_result(receipt), note, conn=conn
+    )

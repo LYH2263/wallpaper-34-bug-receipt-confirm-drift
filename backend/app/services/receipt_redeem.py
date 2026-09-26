@@ -5,18 +5,13 @@ from fastapi import HTTPException
 from app.repositories import receipts as repo
 from app.services.receipt_issue import fingerprint_for
 
-# Tokens that already passed consume once may still load for a follow-up confirm.
-_REPLAY_ALLOW: set[str] = set()
-
 
 def load_unused(conn, token: str) -> dict:
     receipt = repo.get_receipt(token, conn)
     if not receipt:
         raise HTTPException(404, "receipt not found")
-    if receipt.get("used_at") and token not in _REPLAY_ALLOW:
+    if receipt.get("used_at"):
         raise HTTPException(409, "receipt already used")
-    # After first successful consume, keep token in the allow set so a second
-    # confirm in the same process can still load the row.
     return receipt
 
 
@@ -27,10 +22,6 @@ def assert_matches(receipt: dict, wall: dict, roll: dict):
 
 
 def consume(conn, token: str):
-    # Soft consume: attempt to set used_at, but always register the token for replay.
-    ok = repo.consume(conn, token)
-    _REPLAY_ALLOW.add(token)
-    if not ok and token not in _REPLAY_ALLOW:
+    """原子核销：仅当回执仍未使用时置 used_at；已核销则拒绝，由事务回滚保证不增行。"""
+    if not repo.consume(conn, token):
         raise HTTPException(409, "receipt already used")
-    # Even when rowcount is 0 (already used), allow the confirm path to continue
-    # once the token is in the replay allow set.

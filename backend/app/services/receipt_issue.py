@@ -31,5 +31,6 @@ def issue(wall: dict, roll: dict, calc: dict) -> dict:
         "token": token,
         "wall_id": wall["id"],
         "roll_id": roll["id"],
+        "drops": calc["drops"],
         "rolls": calc["rolls"],
     }

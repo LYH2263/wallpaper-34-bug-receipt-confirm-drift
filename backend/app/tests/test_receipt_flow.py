@@ -52,6 +52,21 @@ def test_confirm_with_fresh_receipt_writes_one_run():
     assert _runs_count() == before + 1
 
 
+def test_confirm_writes_receipt_face_values():
+    body = _dry_run()
+    receipt = body["receipt"]
+    assert receipt["drops"] == body["drops"] and receipt["rolls"] == body["rolls"]
+    r = client.post("/api/estimate/confirm", json={"receipt": receipt["token"], "note": "pin"})
+    assert r.status_code == 200, r.text
+    assert r.json()["drops"] == receipt["drops"]
+    assert r.json()["rolls"] == receipt["rolls"]
+    run = client.get("/api/runs").json()["items"][0]
+    assert run["result"]["drops"] == receipt["drops"]
+    assert run["result"]["rolls"] == receipt["rolls"]
+    # 历史行结果就是干算快照本身，不含确认当下的重算痕迹
+    assert run["result"] == {k: body[k] for k in ("drops", "drop_len_m", "pattern_m", "strips_per_roll", "rolls")}
+
+
 def test_confirm_missing_or_unknown_receipt_fails():
     before = _runs_count()
     assert client.post("/api/estimate/confirm", json={"receipt": ""}).status_code == 400
@@ -106,6 +121,23 @@ def test_failed_confirm_can_redry_for_new_receipt():
         assert _runs_count() == before + 1
     finally:
         _update("UPDATE walls SET perimeter=? WHERE id=?", 16.0, 1)
+
+
+def test_failed_confirm_leaves_receipt_unused():
+    before = _runs_count()
+    token = _dry_run()["receipt"]["token"]
+    _update("UPDATE walls SET perimeter=? WHERE id=?", 19.0, 1)
+    try:
+        assert client.post("/api/estimate/confirm", json={"receipt": token}).status_code == 409
+        assert _runs_count() == before
+    finally:
+        _update("UPDATE walls SET perimeter=? WHERE id=?", 16.0, 1)
+    # 失败的确认不核销回执：改回签发时的值后，原回执仍可确认且只增一行
+    r = client.post("/api/estimate/confirm", json={"receipt": token})
+    assert r.status_code == 200, r.text
+    assert _runs_count() == before + 1
+    assert client.post("/api/estimate/confirm", json={"receipt": token}).status_code == 409
+    assert _runs_count() == before + 1
 
 
 def test_legacy_save_endpoint_removed():

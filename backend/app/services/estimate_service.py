@@ -4,6 +4,7 @@ from app.db import get_conn
 from app.engines.wallpaper_math import roll_count
 from app.repositories import rolls, walls
 from app.services import receipt_issue, receipt_redeem, run_writer
+from app.services.receipt_confirm_view import pinned_result
 
 
 def _load_entities(wall_id: int, roll_id: int):
@@ -37,7 +38,7 @@ def dry_run(wall_id: int, roll_id: int):
 
 
 def confirm(token: str, note: str):
-    """凭回执核销并写入一条 run；写库卷数取当前墙面/卷材（与回执钉住值可能不同）。"""
+    """凭回执核销并写入一条 run；写入与返回的幅数/卷数均为回执钉住值。"""
     if not token:
         raise HTTPException(400, "receipt required")
     with get_conn() as conn:
@@ -47,13 +48,14 @@ def confirm(token: str, note: str):
         if not wall or not roll:
             raise HTTPException(409, "wall/roll missing since receipt issued")
         receipt_redeem.assert_matches(receipt, wall, roll)
-        # Soft consume first; write_run rebuilds from live entities.
+        # 核销与写库同事务：任一失败整体回滚，不增行
         receipt_redeem.consume(conn, token)
         run_id = run_writer.write_run(conn, receipt, note)
-        live = _calc(wall, roll)
+        pinned = pinned_result(receipt)
     return {
         "run_id": run_id,
         "wall_id": receipt["wall_id"],
         "roll_id": receipt["roll_id"],
-        "rolls": live["rolls"],
+        "drops": pinned["drops"],
+        "rolls": pinned["rolls"],
     }
